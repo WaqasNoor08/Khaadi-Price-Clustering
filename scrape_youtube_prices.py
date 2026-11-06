@@ -142,13 +142,25 @@ def video_price(title: str, description: str, max_distinct: int = 3) -> int | No
 # --------------------------------------------------------------------------- #
 # YouTube API stages
 # --------------------------------------------------------------------------- #
-def build_queries(brand: str) -> list[str]:
-    return [f"{brand} {topic} price rs" for topic in SEARCH_TOPICS]
+def build_queries(brand: str, extra_topics: list[str] | None = None,
+                  only_extra: bool = False) -> list[str]:
+    """Search queries: the default topics plus optional extra ones.
+
+    ``only_extra`` skips the default topics, which saves quota on follow-up runs
+    that only want to try new keywords.
+    """
+    topics = [] if only_extra else list(SEARCH_TOPICS)
+    topics += [t.strip() for t in (extra_topics or []) if t.strip()]
+    return [f"{brand} {topic} price rs" for topic in topics]
 
 
 def search_video_ids(yt, queries: list[str], pages: int, page_size: int,
-                     tracker: QuotaTracker) -> list[str]:
-    """Stage 1: run the search queries and collect unique video ids."""
+                     tracker: QuotaTracker, published_after: str | None = None) -> list[str]:
+    """Stage 1: run the search queries and collect unique video ids.
+
+    ``published_after`` (RFC 3339, e.g. 2025-01-01T00:00:00Z) restricts results to
+    recent videos, so no quota is spent on videos the year filter would drop anyway.
+    """
     found: dict[str, None] = {}
     for query in queries:
         token = None
@@ -160,6 +172,7 @@ def search_video_ids(yt, queries: list[str], pages: int, page_size: int,
                 response = yt.search().list(
                     q=query, part="id", type="video",
                     pageToken=token, maxResults=min(50, page_size),
+                    publishedAfter=published_after,
                 ).execute()
             except HttpError as err:
                 if is_quota_error(err):
@@ -305,6 +318,10 @@ def parse_args() -> argparse.Namespace:
                    help="keep 'starting at' / sale / off videos (dropped by default)")
     p.add_argument("--quota-budget", type=int, default=8_000,
                    help="stop before spending more than this many quota units")
+    p.add_argument("--extra-topics", default="",
+                   help="comma-separated extra search keywords, e.g. 'haul,suit price kitni'")
+    p.add_argument("--only-extra", action="store_true",
+                   help="search only the --extra-topics (skip the default topics) to save quota")
     p.add_argument("--reuse", action="store_true",
                    help="reuse the cached video list instead of searching again")
     p.add_argument("--dry-run", action="store_true", help="print the quota estimate and exit")
@@ -319,7 +336,8 @@ def main() -> None:
     out_path = Path(args.out)
     cache_path = out_path.parent / "video_candidates.csv"
     use_cache = args.reuse and cache_path.exists()
-    queries = build_queries(args.brand)
+    queries = build_queries(args.brand, args.extra_topics.split(","), args.only_extra)
+    published_after = f"{args.since_year}-01-01T00:00:00Z"
 
     # Quota estimate (comments cost ~1 unit per video, so this is an upper-bound guess).
     search_units = 0 if use_cache else len(queries) * args.pages * SEARCH_COST
@@ -343,9 +361,17 @@ def main() -> None:
         log.info("Loading cached video list: %s", cache_path)
         candidates = pd.read_csv(cache_path).to_dict("records")
     else:
-        video_ids = search_video_ids(yt, queries, args.pages, args.per_query, tracker)
+        video_ids = search_video_ids(yt, queries, args.pages, args.per_query, tracker,
+                                     published_after)
         log.info("Unique videos found: %d", len(video_ids))
         candidates = fetch_candidates(yt, video_ids, args.brand, tracker)
+        if cache_path.exists():
+            # Accumulate: keep earlier candidates and add the new ones.
+            merged = {c["video_id"]: c for c in pd.read_csv(cache_path).to_dict("records")}
+            before = len(merged)
+            merged.update({c["video_id"]: c for c in candidates})
+            log.info("Merged with the existing cache: %d -> %d videos", before, len(merged))
+            candidates = list(merged.values())
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(candidates).to_csv(cache_path, index=False, encoding="utf-8-sig")
         log.info("Cached %d candidate videos -> %s", len(candidates), cache_path)

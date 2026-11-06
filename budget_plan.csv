@@ -1,4 +1,4 @@
 price_tier,price_min,price_max,budget_share_pct,budget_pkr
-Budget,2075,3700,34.6,346000.0
-Mid-range,4500,8000,40.8,408000.0
-Premium,30000,32425,24.6,246000.0
+Budget,1500,2750,25.2,252000.0
+Mid-range,3000,8000,40.7,407000.0
+Premium,17712,32425,34.0,340000.0

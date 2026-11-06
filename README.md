@@ -17,7 +17,6 @@ Which price range of Khaadi products gets the most positive customer feedback, a
 .
 ├── scrape_youtube_prices.py   # step 1: videos with a price -> comments CSV
 ├── cluster_prices.py          # step 2: clustering, sentiment, budget, charts
-├── generate_demo_data.py      # synthetic data to test the pipeline
 ├── requirements.txt
 └── README.md
 ```
@@ -44,16 +43,16 @@ python scrape_youtube_prices.py --brand Khaadi --min-price 2000 --min-comments 1
 # 3. Re-run with other filters without searching again
 python scrape_youtube_prices.py --brand Khaadi --min-price 3000 --min-comments 1 --reuse
 
-# 4. Cluster and allocate the budget
+# 4. Grow the dataset on another day: search only new keywords. New videos are
+#    merged into the cached list, so the dataset accumulates over several days.
+python scrape_youtube_prices.py --brand Khaadi --only-extra \
+    --extra-topics "haul,suit price kitni,winter 2026,new collection,try on" \
+    --min-price 2000 --min-comments 1
+
+# 5. Cluster and allocate the budget
 python cluster_prices.py --input data/comments.csv --budget 1000000 --k 3
 ```
 
-Test the pipeline without any API key on synthetic data:
-
-```bash
-python generate_demo_data.py --out data/demo_comments.csv
-python cluster_prices.py --input data/demo_comments.csv
-```
 
 ## YouTube API quota
 
@@ -86,8 +85,25 @@ a few hundred units on comments. `--quota-budget` (default 8,000) stops the scri
 
 ## Results
 
-_To be filled in after running on real data. Numbers produced by `generate_demo_data.py` are
-synthetic and must not be reported as findings._
+**Preliminary result (54 products, 197 comments, videos published 2024 or later):**
+no statistically significant difference in sentiment across price tiers
+(chi-square = 0.8, p = 0.94).
+
+| Tier | Price range (PKR) | Products | Comments |
+|---|---|---|---|
+| Budget | 2,000 - 2,750 | 16 | 40 |
+| Mid-range | up to 8,000 | 21 | 92 |
+| Premium | 17,712 - 32,425 | 17 | 65 |
+
+Full per-tier figures are in `output/cluster_summary.csv`.
+
+The sample is too small (about 4 comments per product, 40-90 comments per tier) to detect
+moderate differences, so this is **not** evidence that price has no effect on sentiment. Which
+tier looked "most positive" changed between runs with different data, which is a sign that
+the differences are noise at this sample size. Roughly 400 comments per tier would be needed to
+detect a 10-point difference. The budget split in `output/budget_plan.csv` is derived from
+these unreliable rates and should be treated as a demonstration of the method, not as a
+recommendation.
 
 ## Limitations
 
