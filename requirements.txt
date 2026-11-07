@@ -7,3 +7,4 @@ seaborn>=0.12.0
 vaderSentiment>=3.3.2
 google-api-python-client>=2.100.0
 python-dotenv>=1.0.0
+Streamlit
