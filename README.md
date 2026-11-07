@@ -4,6 +4,8 @@ Project 2 of a brand-analytics series (Project 1: YouTube comment scraping and s
 
 **Research question:** Which price range of Khaadi products gets the most positive customer feedback, and how should a marketing budget be split across price tiers?
 
+**Live dashboard:** [khaadipricetiers.streamlit.app](https://khaadipricetiers.streamlit.app/)
+
 **Short answer from the current data:** the three price tiers show almost identical sentiment (55.0% / 56.5% / 56.9% positive), the differences are far from statistically significant (chi-square = 0.82, p = 0.935), and the sample is too small to detect a real difference. The budget split produced by the pipeline is therefore a **demonstration of the method, not a recommendation**.
 
 ## Table of contents
@@ -12,15 +14,16 @@ Project 2 of a brand-analytics series (Project 1: YouTube comment scraping and s
 2. [Project structure](#project-structure)
 3. [Setup](#setup)
 4. [Usage](#usage)
-5. [YouTube API quota](#youtube-api-quota)
-6. [Data quality rules](#data-quality-rules)
-7. [Dataset overview](#dataset-overview)
-8. [Results](#results)
-9. [Data issues found in this result set](#data-issues-found-in-this-result-set)
-10. [Outputs](#outputs-output)
-11. [Limitations](#limitations)
-12. [Next steps](#next-steps)
-13. [License](#license)
+5. [Live dashboard (Streamlit)](#live-dashboard-streamlit)
+6. [YouTube API quota](#youtube-api-quota)
+7. [Data quality rules](#data-quality-rules)
+8. [Dataset overview](#dataset-overview)
+9. [Results](#results)
+10. [Data issues found in this result set](#data-issues-found-in-this-result-set)
+11. [Outputs](#outputs)
+12. [Limitations](#limitations)
+13. [Next steps](#next-steps)
+14. [License](#license)
 
 ## Approach
 
@@ -39,20 +42,26 @@ YouTube search -> video_candidates.csv -> comments.csv -> KMeans (log price) -> 
 
 ```
 .
-├── scrape_youtube_prices.py   # step 1: videos with a price -> comments CSV
-├── cluster_prices.py          # step 2: clustering, sentiment, budget, charts
+├── scrape_youtube_prices.py     # step 1: videos with a price -> comments CSV
+├── cluster_prices.py            # step 2: clustering, sentiment, budget, charts
+├── app.py                       # Streamlit dashboard (reads the CSVs below)
+├── Khaadi_Price_Clustering.ipynb  # Colab notebook used to run the pipeline
 ├── requirements.txt
-├── data/
-│   ├── video_candidates.csv   # cached list of priced videos (262 rows)
-│   └── comments.csv           # scraped comments (input of step 2)
-├── output/
-│   ├── item_clusters.csv      # one row per product with its tier (54 rows)
-│   ├── cluster_summary.csv    # one row per tier: price range, sentiment, budget
-│   ├── budget_plan.csv        # budget split per tier
-│   ├── brand_tier_matrix.csv  # brand x tier comments and positive %
-│   └── *.png                  # charts
+├── video_candidates.csv         # cached list of priced videos (262 rows)
+├── item_clusters.csv            # one row per product with its tier (54 rows)
+├── cluster_summary.csv          # one row per tier: price range, sentiment, budget
+├── budget_plan.csv              # budget split per tier
+├── brand_tier_matrix.csv        # brand x tier comments and positive %
+├── price_clusters.png           # charts
+├── sentiment_by_tier.png
+├── brand_tier_heatmap.png
+├── budget_allocation.png
 └── README.md
 ```
+
+> The result files are stored in the repository root so the dashboard can read them directly.
+> When you run the scripts locally they write to `data/` and `output/`; `app.py` looks in
+> `output/`, then `data/`, then the root, so either layout works.
 
 ## Setup
 
@@ -89,6 +98,30 @@ python cluster_prices.py --input data/comments.csv --budget 1000000 --k 3
 > **Reproducing the results below:** the cheapest product kept in the result set costs PKR 1,500, so
 > that run used a minimum price of 1,500 or lower. The example commands above use 2,000 and 3,000,
 > which would drop the cheapest Budget items and change the tier boundaries.
+
+## Live dashboard (Streamlit)
+
+`app.py` is an interactive dashboard over the result files: tier summary, sentiment charts, a
+price-vs-sentiment scatter, an adjustable budget split, and filterable product and video tables.
+It only reads the CSVs, so it needs no API key.
+
+**Run locally**
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+**Deploy for free on Streamlit Community Cloud**
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+2. Click **Create app**, choose this repository, branch `main`, main file `app.py`.
+3. Click **Deploy**. After a few minutes you get a public link.
+
+**Live app:** [khaadipricetiers.streamlit.app](https://khaadipricetiers.streamlit.app/)
+
+> Free Streamlit apps go to sleep after a period of inactivity. If you see a "this app has gone to
+> sleep" message, click **Yes, get this app back up** and wait a few seconds.
 
 ## YouTube API quota
 
@@ -223,7 +256,9 @@ more than the choice of clustering algorithm. They should be fixed before drawin
 | 5 | **Neutral is the biggest hidden category** | 36-40% of comments are neutral in every tier. | Likely many Roman Urdu comments that VADER cannot score (see Limitations). |
 | 6 | **Previous README said "2024 or later"** | All analysed videos are from 2025 (12) or 2026 (42), matching the default `--since-year 2025`. | Corrected in this version. |
 
-## Outputs (`output/`)
+## Outputs
+
+Generated by `cluster_prices.py` (in `output/` when run locally, in the repo root in this repository):
 
 | File | Content |
 |---|---|
@@ -236,7 +271,8 @@ more than the choice of clustering algorithm. They should be fixed before drawin
 | `brand_tier_heatmap.png` | brand x tier heatmap |
 | `budget_allocation.png` | budget split per tier |
 
-Input caches: `data/video_candidates.csv` (video_id, item, price, year, promo) and `data/comments.csv`.
+Input cache: `video_candidates.csv` (video_id, item, price, year, promo). The scraped `comments.csv`
+(input of step 2) is not stored in this repository.
 
 ## Limitations
 
